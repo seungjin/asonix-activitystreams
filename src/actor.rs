@@ -21,6 +21,8 @@
 //! # Ok(())
 //! # }
 //! ```
+use std::collections::HashMap;
+
 use crate::{
     base::{AsBase, Base, Extends},
     checked::CheckError,
@@ -823,7 +825,7 @@ pub trait ApActorExt: AsApActor {
     /// # Ok(())
     /// # }
     /// ```
-    fn endpoints<'a>(&'a self) -> Result<Option<Endpoints<&'a IriString>>, CheckError>
+    fn endpoints<'a>(&'a self) -> Result<Option<&'a Endpoints<IriString>>, CheckError>
     where
         Self: BaseExt,
         Self::Inner: 'a,
@@ -833,28 +835,39 @@ pub trait ApActorExt: AsApActor {
 
             endpoints
                 .proxy_url
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
             endpoints
                 .oauth_authorization_endpoint
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
             endpoints
                 .oauth_token_endpoint
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
             endpoints
                 .provide_client_key
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
             endpoints
                 .sign_client_key
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
             endpoints
                 .shared_inbox
+                .as_ref()
                 .map(|i| check_opt(i, authority_opt.as_ref()))
                 .transpose()?;
+            endpoints
+                .nonstandard
+                .values()
+                .map(|v| check_opt(v, authority_opt.as_ref()))
+                .collect::<Result<(), _>>()?;
 
             return Ok(Some(endpoints));
         }
@@ -873,11 +886,11 @@ pub trait ApActorExt: AsApActor {
     ///     println!("{:?}", endpoints);
     /// }
     /// ```
-    fn endpoints_unchecked<'a>(&'a self) -> Option<Endpoints<&'a IriString>>
+    fn endpoints_unchecked<'a>(&'a self) -> Option<&'a Endpoints<IriString>>
     where
         Self::Inner: 'a,
     {
-        self.ap_actor_ref().endpoints.as_ref().map(|e| e.as_ref())
+        self.ap_actor_ref().endpoints.as_ref()
     }
 
     /// Mutably fetch the endpoints for the current actor
@@ -894,11 +907,11 @@ pub trait ApActorExt: AsApActor {
     ///     println!("{:?}", endpoints);
     /// }
     /// ```
-    fn endpoints_mut<'a>(&'a mut self) -> Option<Endpoints<&'a mut IriString>>
+    fn endpoints_mut<'a>(&'a mut self) -> Option<&'a mut Endpoints<IriString>>
     where
         Self::Inner: 'a,
     {
-        self.ap_actor_mut().endpoints.as_mut().map(|e| e.as_mut())
+        self.ap_actor_mut().endpoints.as_mut()
     }
 
     /// Set the endpoints for the current actor
@@ -1139,6 +1152,14 @@ pub struct Endpoints<T> {
     /// - Functional: true
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shared_inbox: Option<T>,
+
+    /// Any nonstandard endpoints present in the endpoints record end up here.
+    ///
+    /// Software like Pleroma and Akkoma provide additional URLs here and extending Endpoints
+    /// specifically the way objects are normally extended isn't possible for nested structs like
+    /// this.
+    #[serde(flatten)]
+    pub nonstandard: HashMap<String, T>,
 }
 
 /// A simple type to create an Actor out of any Object
@@ -1325,47 +1346,6 @@ impl<Inner> ApActor<Inner> {
 }
 
 impl<T> Endpoints<T> {
-    /// Borrow the current Endpoints struct
-    ///
-    /// ```rust
-    /// # fn main() -> Result<(), anyhow::Error> {
-    /// use activitystreams::{actor::Endpoints, iri};
-    /// use iri_string::types::IriString;
-    ///
-    /// let uri = iri!("https://example.com");
-    ///
-    /// let endpoints: Endpoints<IriString> = Endpoints {
-    ///     shared_inbox: Some(uri.clone()),
-    ///     ..Default::default()
-    /// };
-    ///
-    /// assert_eq!(endpoints.as_ref().shared_inbox, Some(&uri));
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn as_ref(&self) -> Endpoints<&T> {
-        Endpoints {
-            proxy_url: self.proxy_url.as_ref(),
-            oauth_authorization_endpoint: self.oauth_authorization_endpoint.as_ref(),
-            oauth_token_endpoint: self.oauth_token_endpoint.as_ref(),
-            provide_client_key: self.provide_client_key.as_ref(),
-            sign_client_key: self.sign_client_key.as_ref(),
-            shared_inbox: self.shared_inbox.as_ref(),
-        }
-    }
-
-    /// Mutably borrow the endpoints struct
-    pub fn as_mut(&mut self) -> Endpoints<&mut T> {
-        Endpoints {
-            proxy_url: self.proxy_url.as_mut(),
-            oauth_authorization_endpoint: self.oauth_authorization_endpoint.as_mut(),
-            oauth_token_endpoint: self.oauth_token_endpoint.as_mut(),
-            provide_client_key: self.provide_client_key.as_mut(),
-            sign_client_key: self.sign_client_key.as_mut(),
-            shared_inbox: self.shared_inbox.as_mut(),
-        }
-    }
-
     /// Map the URLs in Endpoints from T to U
     ///
     /// ```rust
@@ -1395,6 +1375,11 @@ impl<T> Endpoints<T> {
             provide_client_key: self.provide_client_key.map(f),
             sign_client_key: self.sign_client_key.map(f),
             shared_inbox: self.shared_inbox.map(f),
+            nonstandard: self
+                .nonstandard
+                .into_iter()
+                .map(|(k, v)| (k, (f)(v)))
+                .collect(),
         }
     }
 }
@@ -1408,6 +1393,7 @@ impl<T> Default for Endpoints<T> {
             provide_client_key: None,
             sign_client_key: None,
             shared_inbox: None,
+            nonstandard: HashMap::new(),
         }
     }
 }
