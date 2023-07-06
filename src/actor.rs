@@ -866,8 +866,7 @@ pub trait ApActorExt: AsApActor {
             endpoints
                 .nonstandard
                 .values()
-                .map(|v| check_opt(v, authority_opt.as_ref()))
-                .collect::<Result<(), _>>()?;
+                .try_for_each(|v| check_opt(v, authority_opt.as_ref()))?;
 
             return Ok(Some(endpoints));
         }

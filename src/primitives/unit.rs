@@ -222,7 +222,16 @@ impl From<&str> for Unit {
 
 /// A list of units of length that represent valid units for certain ActivityStreams objects
 #[derive(
-    Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    serde::Deserialize,
+    serde::Serialize,
 )]
 #[serde(untagged)]
 enum Length {
@@ -238,6 +247,7 @@ enum Length {
     #[serde(rename = "km")]
     Kilometers,
 
+    #[default]
     #[serde(rename = "m")]
     Meters,
 }
@@ -273,12 +283,6 @@ impl Length {
 
     fn is_meters(&self) -> bool {
         matches!(self, Length::Meters)
-    }
-}
-
-impl Default for Length {
-    fn default() -> Self {
-        Length::Meters
     }
 }
 
